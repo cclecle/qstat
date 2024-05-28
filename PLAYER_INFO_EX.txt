@@ -1,0 +1,102 @@
+# Query Message
+ID: byte = 0x70
+Version: byte = 1
+
+
+# Response Message
+ID: byte = 0x71
+Version: byte = 1
+NbPlayer: int16 = PlayerRecord.Count
+PlayerRecord:[
+	{
+		PlayerIndex: int32 = <?>
+		NbAttr: int16 = Attr.Count
+		Attr: [
+			{
+				AttrType: byte = <?>
+				AttrId: byte = <?>
+				(ExtAttrId: Optional[byte] = <?>)
+				AttrValue: <?>  = <?>
+			},
+			...
+		]
+	},
+	...
+]
+
+
+AttrType:
+	Lower 4bits:
+		0 -> Invalid
+		1 -> Word8, 
+		2 -> Word16(le), 
+		3 -> Word32(le),
+		4 -> ZeroTerminatedString
+		5 -> Float32(le)
+	Bit 5: reserved
+	Bit 6: reserved
+	Bit 7: use *Custom* AttributeId set
+	Bit 8: use *Extended* AttributeId Map 
+
+# *Generic* AttributeId
+0 - Invalid
+1..31 - Reserved
+
+// Main Group
+32 - ZeroTerminatedString - UUID
+33 - ZeroTerminatedString - Name
+34 - ZeroTerminatedString - FullName
+35 - Word16/int16 - Ping (ms) 
+36 - Word8/bool - IsInTeam
+37 - Word8/char - TeamId
+38 - Word32/int32 - Score
+39 - Float32 - ConnectionTime (s)
+40 - ZeroTerminatedString - IP
+41 - Word8/bool - IsBot
+42 - Word8/bool - IsAdmin
+43 - Word8/bool - IsSpectating
+44 - Word8/bool - IsAuthenticated
+45 - ZeroTerminatedString - Faction
+
+46..63 - Reserved
+
+// Fps Group
+64 - Word32/int32 - Frags
+65 - Word32/int32 - Death
+66 - Float32 - ACC (%, 0-1)
+67 - Float32 - Efficiency
+
+68..95 - Reserved
+
+// RTS Group
+96 - Float32 - APM
+97 - Word32/int32 - ArmyValue
+98 - Word32/int32 - AssetsValue
+99 - Word32/int32 - BuildingsDead
+100 - Word32/int32 - BuildingsKilled
+101 - Word32/int32 - Earned
+102 - Word32/int32 - UnitsDead
+103 - Word32/int32 - UnitsKilled
+104 - Float32 - MapExplored (%, 0-1))
+
+105..255 - Reserved
+
+# *Extended Generic* AttrType
+0 - Invalid
+1..255 - Reserved
+
+# *Custom* AttributeId (*OpenRA*)
+0 - Invalid
+1..31 - Reserved
+32 - Word32/int32 - NbHarvester
+33 - Word32/int32 - NbCarryAll
+34 - Word32/int32 - NbFactory
+35 - Word32/int32 - NbHeavyFactory
+36 - Word32/int32 - NbBarrack
+37 - Word32/int32 - NbStarPort
+38 - Word32/int32 - NbCommandCenter
+39..255 - Reserved
+
+# *Extended Custom* AttrType (*OpenRA*)
+0 - Invalid
+1..255 - Reserved

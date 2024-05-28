@@ -59,7 +59,9 @@
 	#define SOCKET_ERROR		-1
 #endif  /* _WIN32 */
 
+#include <stdint.h>
 #include <string.h>
+
 
 #define MAXSTRLEN		2048
 #define ENCODING_LATIN_1	1
@@ -101,6 +103,7 @@ typedef query_status_t (*PacketFunc)(struct qserver *, char *rawpkt, int pktlen)
 #include "ut2004.h"
 #include "doom3.h"
 #include "a2s.h"
+#include "a2s_openra.h"
 #include "fl.h"
 #include "gps.h"
 #include "gs2.h"
@@ -186,6 +189,7 @@ typedef query_status_t (*PacketFunc)(struct qserver *, char *rawpkt, int pktlen)
 #define FARMSIM_DEFAULT_PORT			10828
 #define KSP_DEFAULT_PORT			6702
 #define TF_DEFAULT_PORT				37016
+#define OPENRA_DEFAULT_PORT			11000
 
 #define Q_UNKNOWN_TYPE				0
 #define MASTER_SERVER				0x40000000
@@ -270,8 +274,9 @@ typedef query_status_t (*PacketFunc)(struct qserver *, char *rawpkt, int pktlen)
 #define KSP_PROTOCOL_SERVER			77
 #define TF_PROTOCOL_SERVER			78
 #define TEE_MASTER				79
+#define OPENRA_SERVER			80
 
-#define LAST_BUILTIN_SERVER			80
+#define LAST_BUILTIN_SERVER			81
 
 #define TF_SINGLE_QUERY				(1 << 1)
 #define TF_OUTFILE				(1 << 2)
@@ -339,6 +344,7 @@ void display_fl_player_info(struct qserver *server);
 void display_tee_player_info(struct qserver *server);
 void display_ventrilo_player_info(struct qserver *server);
 void display_starmade_player_info(struct qserver *server);
+void display_a2s_ext_player_info(struct qserver *server);
 
 void raw_display_server(struct qserver *server);
 void raw_display_server_rules(struct qserver *server);
@@ -369,6 +375,7 @@ void raw_display_fl_player_info(struct qserver *server);
 void raw_display_tee_player_info(struct qserver *server);
 void raw_display_ventrilo_player_info(struct qserver *server);
 void raw_display_starmade_player_info(struct qserver *server);
+void raw_display_a2s_ext_player_info(struct qserver *server);
 
 void xml_display_server(struct qserver *server);
 void xml_header();
@@ -3749,6 +3756,42 @@ server_type *find_server_type_string(char *type_string);
 			deal_with_teemaster_packet,     /* packet_func */
 		},
 		{
+			/* OPENRA */
+			OPENRA_SERVER,                             /* id */
+			"ORA",                                  /* type_prefix */
+			"ora",                                  /* type_string */
+			"-ora",                                 /* type_option */
+			"OpenRA",                      			/* game_name */
+			0,                                      /* master */
+			OPENRA_DEFAULT_PORT,                    /* default_port */
+			0,                                      /* port_offset */
+			TF_SHOW_GAME_PORT,                        /* flags */
+			"gamedir",                              /* game_rule */
+			"ORA",                                  /* template_var */
+			NULL,                                   /* status_packet */
+			0,                                      /* status_len */
+			NULL,                                   /* player_packet */
+			0,                                      /* player_len */
+			NULL,                                   /* rule_packet */
+			0,                                      /* rule_len */
+			NULL,                                   /* master_packet */
+			0,                                      /* master_len */
+			NULL,                                   /* master_protocol */
+			NULL,                                   /* master_query */
+			display_a2s_ext_player_info,           	/* display_player_func */
+			display_server_rules,                   /* display_rule_func */
+			raw_display_a2s_ext_player_info,       	/* display_raw_player_func */
+			raw_display_server_rules,               /* display_raw_rule_func */
+			xml_display_player_info,       			/* display_xml_player_func */
+			xml_display_server_rules,               /* display_xml_rule_func */
+			json_display_player_info,      			/* display_json_player_func */
+			json_display_server_rules,              /* display_json_rule_func */
+			send_a2s_openra_request_packet,         /* status_query_func */
+			send_a2s_openra_rule_request_packet,    /* rule_query_func */
+			NULL,                                   /* player_query_func */
+			deal_with_a2s_openra_packet,            /* packet_func */
+		},
+		{
 			Q_UNKNOWN_TYPE, /* id */
 			"",             /* type_prefix */
 			"",             /* type_string */
@@ -3797,35 +3840,42 @@ struct player;
 #define FLAG_PLAYER_TEAMS		(1 << 2)
 #define FLAG_DO_NOT_FREE_GAME		(1 << 3)
 
-#define PLAYER_TYPE_NORMAL		1
-#define PLAYER_TYPE_BOT			2
-#define PLAYER_TYPE_ALIAS		4
+#define PLAYER_TYPE_NORMAL		(short)0
+#define PLAYER_TYPE_BOT			(short)(1<<1)
+#define PLAYER_TYPE_ALIAS		(short)(1<<2)
+#define PLAYER_TYPE_ADMIN		(short)(1<<3)
+#define PLAYER_TYPE_SPEC		(short)(1<<4)
+#define PLAYER_TYPE_AUTH		(short)(1<<5)
 
 #define PLAYER_FLAG_DO_NOT_FREE_TEAM	1
 
 struct player {
+	// Generic attributes
 	int number;
 	char *name;
+	int score;
 	int frags;
-	int team;                       /* Unreal and Tribes only */
-	char *team_name;                /* Tribes, BFRIS only, do not free()  */
+	int deaths;                     
+	int team;
 	int connect_time;
-	int shirt_color;
-	int pants_color;
+	char *skin;
 	char *address;
+	int packet_loss; 
 	int ping;
 	short flags;
-	short type_flag;                /* Tribes 2 only */
-	int packet_loss;                /* Tribes only */
+	short type_flag;
+
+	// TODO: use player_info list...
+	char *team_name;                /* Tribes, BFRIS only, do not free()  */
+	int shirt_color;
+	int pants_color;
 	char *tribe_tag;                /* Tribes 2 / Quake 4 clan name */
-	char *skin;
 	char *mesh;                     /* Unreal only */
 	char *face;                     /* Unreal only */
-	int score;                      /* BFRIS only */
 	int ship;                       /* BFRIS only */
 	int room;                       /* BFRIS only */
-	int deaths;                     /* Descent3 only */
 
+	// Internal
 	char *next_info;
 	int n_info;
 	struct info *info;
@@ -3841,9 +3891,37 @@ struct rule {
 	struct rule *next;
 };
 
+typedef union t_uPlayerInfoValue{
+	char* str;
+	uint8_t b;
+	int8_t i8;
+	int16_t i16;
+	int32_t i32;
+	uint8_t u8;
+	uint16_t u16;
+	uint32_t u32;
+	float f;
+	double d;
+}uPlayerInfoValue;
+
+typedef enum t_ePlayerInfoType{
+	eInfoType_str = 0,
+	eInfoType_b,
+	eInfoType_i8,
+	eInfoType_i16,
+	eInfoType_i32,
+	eInfoType_u8,
+	eInfoType_u16,
+	eInfoType_u32,
+	eInfoType_f,
+	eInfoType_d,
+}ePlayerInfoType;
+
 struct info {
+	int32_t id;
 	char *name;
-	char *value;
+	ePlayerInfoType type;
+	uPlayerInfoValue value;
 	struct info *next;
 };
 
@@ -3991,7 +4069,18 @@ int type_string_compare(server_type *one, server_type *two);
 struct player *get_player_by_number(struct qserver *server, int player_number);
 struct rule *add_rule(struct qserver *server, char *key, char *value, int flags);
 struct player *add_player(struct qserver *server, int player_number);
-struct info *player_add_info(struct player *player, char *key, char *value, int flags);
+struct info* player_add_info(struct player *player, char *key, char* value, int flags);
+struct info* player_add_info_str(struct player *player, int32_t id, char *key, char* value, int flags);
+struct info* player_add_info_bool(struct player *player, int32_t id, char *key, uint8_t value, int flags);
+struct info* player_add_info_u8(struct player *player, int32_t id, char *key, uint8_t value, int flags);
+struct info* player_add_info_u16(struct player *player, int32_t id, char *key, uint16_t value, int flags);
+struct info* player_add_info_u32(struct player *player, int32_t id, char *key, uint32_t value, int flags);
+struct info* player_add_info_i8(struct player *player, int32_t id, char *key, int8_t value, int flags);
+struct info* player_add_info_i16(struct player *player, int32_t id, char *key, int16_t value, int flags);
+struct info* player_add_info_i32(struct player *player, int32_t id, char *key, int32_t value, int flags);
+struct info* player_add_info_f(struct player *player, int32_t id, char *key, float value, int flags);
+struct info* player_add_info_d(struct player *player, int32_t id, char *key, double value, int flags);
+void player_info_get_formated_value(struct info * info, char* szBuffOut);
 void players_set_teamname(struct qserver *server, int teamid, char *teamname);
 
 /*

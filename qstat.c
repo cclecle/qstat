@@ -606,6 +606,23 @@ display_halflife_player_info(struct qserver *server)
 	}
 }
 
+void
+display_a2s_ext_player_info(struct qserver *server)
+{
+	struct player *player;
+
+	player = server->players;
+	for ( ; player != NULL; player = player->next) {
+		xform_printf(OF,"\t%s\tScore: %d\t%s\tPing: %d ms\tTeam: %d\tIP: %s\n", 
+					xform_name(player->name, server), 
+					player->score,
+					play_time(player->connect_time, 1),
+					player->ping,
+					player->team,
+					player->address);
+	}
+}
+
 
 void
 display_fl_player_info(struct qserver *server)
@@ -735,9 +752,9 @@ calculate_armyops_score(struct player *player)
 
 	for (info = player->info; info; info = info->next) {
 		if ((0 == strcmp(info->name, "leader")) || (0 == strcmp(info->name, "goal")) || (0 == strcmp(info->name, "roe"))) {
-			score += atoi(info->value);
+			score += atoi(info->value.str); // TODO: store integer in info->value
 		} else if ((0 == strcmp(info->name, "kia")) || (0 == strcmp(info->name, "enemy"))) {
-			kill_score += atoi(info->value);
+			kill_score += atoi(info->value.str); // TODO: store integer in info->value
 		}
 	}
 
@@ -1265,6 +1282,25 @@ raw_display_halflife_player_info(struct qserver *server)
 	player = server->players;
 	for ( ; player != NULL; player = player->next) {
 		xform_printf(OF, fmt, xform_name(player->name, server), RD, player->frags, RD, play_time(player->connect_time, 1));
+		fputs("\n", OF);
+	}
+}
+
+void
+raw_display_a2s_ext_player_info(struct qserver *server)
+{
+	static char fmt[24] = "%s" "%s%d" "%s%s" "%s%d" "%s%d" "%s%s";
+	struct player *player;
+
+	player = server->players;
+	for ( ; player != NULL; player = player->next) {
+		fprintf(OF, fmt, 
+					xform_name(player->name, server), RD, 
+					player->score, RD, 
+					play_time(player->connect_time, 1), RD,
+					player->ping, RD,
+					player->team, RD,
+					(player_address) ? player->address : "");
 		fputs("\n", OF);
 	}
 }
@@ -1877,11 +1913,18 @@ void
 xml_display_player_info_info(struct player *player)
 {
 	struct info *info;
+	char szTMP[MAXSTRLEN];
 
-	for (info = player->info; info; info = info->next) {
-		if (info->name) {
+	for (info = player->info; info; info = info->next)
+	{
+		if (info->name) 
+		{
+			// xml_escape() returns references to a static buffer so we dont need any here + no free()
+			// up to 4 subsequent calls are supported before looping over the buffer ...
 			char *name = xml_escape(info->name);
-			char *value = xml_escape(info->value);
+			char* value = NULL; 
+			player_info_get_formated_value(info,szTMP);
+			value = xml_escape(szTMP);
 			xform_printf(OF, "\t\t\t\t<%s>%s</%s>\n", name, value, name);
 		}
 	}
@@ -2192,7 +2235,7 @@ xml_display_doom3_player_info(struct qserver *server)
 		if (player->skin) {
 			xform_printf(OF, "\t\t\t\t<skin>%s</skin>\n", xml_escape(player->skin));
 		}
-		if (player->type_flag) {
+		if (player->type_flag & PLAYER_TYPE_BOT) {
 			xform_printf(OF, "\t\t\t\t<type>bot</type>\n");
 		} else {
 			xform_printf(OF, "\t\t\t\t<type>player</type>\n");
@@ -2220,6 +2263,7 @@ xml_display_player_info(struct qserver *server)
 
 	player = server->players;
 	for ( ; player != NULL; player = player->next) {
+		char szTMP[1024] = {0};
 		xform_printf(OF, "\t\t\t<player>\n");
 
 		xform_printf(OF, "\t\t\t\t<name>%s</name>\n", xml_escape(xform_name(player->name, server)));
@@ -2244,15 +2288,42 @@ xml_display_player_info(struct qserver *server)
 		if (player->skin) {
 			xform_printf(OF, "\t\t\t\t<skin>%s</skin>\n", xml_escape(player->skin));
 		}
+		if (NA_INT != player->shirt_color) {
+			xform_printf(OF, "\t\t\t\t<shirt_color>%d</shirt_color>\n", player->shirt_color);
+		}
+		if (NA_INT != player->pants_color) {
+			xform_printf(OF, "\t\t\t\t<pants_color>%d</pants_color>\n", player->pants_color);
+		}
+
+		if (player->type_flag & PLAYER_TYPE_BOT) 
+		{
+			strcpy(szTMP,"<bot/>");
+		} 
+		else
+		{
+			strcpy(szTMP,"<player/>");
+			if (player->type_flag & PLAYER_TYPE_ALIAS)
+				strcat(szTMP,"<alias/>");
+			if (player->type_flag & PLAYER_TYPE_ADMIN)
+				strcat(szTMP,"<admin/>");
+			if (player->type_flag & PLAYER_TYPE_SPEC)
+				strcat(szTMP,"<spec/>");
+			if (player->type_flag & PLAYER_TYPE_AUTH)
+				strcat(szTMP,"<auth/>");
+		}
+		xform_printf(OF, "\t\t\t\t<type>%s</type>\n",szTMP);
 
 		if (player->connect_time) {
 			xform_printf(OF, "\t\t\t\t<time>%s</time>\n", xml_escape(play_time(player->connect_time, 1)));
+			xform_printf(OF, "\t\t\t\t<connect_time>%d</time>\n", player->connect_time);
 		}
 
 		if (player->address) {
 			xform_printf(OF, "\t\t\t\t<address>%s</address>\n", xml_escape(player->address));
 		}
-
+		if (NA_INT != player->packet_loss) {
+			xform_printf(OF, "\t\t\t\t<packet_loss>%d</packet_loss>\n", player->packet_loss);
+		}
 		xml_display_player_info_info(player);
 
 		xform_printf(OF, "\t\t\t</player>\n");
@@ -7296,71 +7367,154 @@ rule_info_packet(struct qserver *server, struct q_packet *pkt, int datalen)
 	return (0);
 }
 
+void player_info_get_formated_value(struct info * info, char* szBuffOut)
+{
+	switch(info->type)
+	{
+		case eInfoType_str:
+			strcpy(szBuffOut,info->value.str);
+			break;
+		case eInfoType_b:
+			if(info->value.b > 0)
+			{
+				strcpy(szBuffOut,"true");
+			}
+			else
+			{
+				strcpy(szBuffOut,"false");
+			}
+			break;
+		case eInfoType_i8:
+			sprintf(szBuffOut,"%i",info->value.i8);
+			break;
+		case eInfoType_i16:
+			sprintf(szBuffOut,"%i",info->value.i16);
+			break;
+		case eInfoType_i32:
+			sprintf(szBuffOut,"%i",info->value.i32);
+			break;
+		case eInfoType_u8:
+			sprintf(szBuffOut,"%u",info->value.u8);
+			break;
+		case eInfoType_u16:
+			sprintf(szBuffOut,"%u",info->value.u16);
+			break;
+		case eInfoType_u32:
+			sprintf(szBuffOut,"%u",info->value.u32);
+			break;
+		case eInfoType_f:
+			sprintf(szBuffOut,"%f",info->value.f);
+			break;
+		case eInfoType_d:
+			sprintf(szBuffOut,"%f",info->value.d);
+			break;
+		default:
+			fprintf(stderr, "wrong player_info->type value\n");
+			exit(1);
+			break;
+	}
+}
 
-struct info *
-player_add_info(struct player *player, char *key, char *value, int flags)
+static void player_info_set_value(	struct info * info,
+									uPlayerInfoValue value, 
+									int flags)
+{
+	switch(info->type)
+	{
+		case eInfoType_str :
+			// We should be able to free this
+			if(info->value.str)
+				free(info->value.str);
+			if (flags & NO_VALUE_COPY)
+			{
+				info->value.str = value.str;
+			}
+			else
+			{
+				info->value.str = strdup(value.str);
+			}
+			break;
+		case eInfoType_b :
+		case eInfoType_i8 :
+		case eInfoType_i16 :
+		case eInfoType_i32 :
+		case eInfoType_u8 :
+		case eInfoType_u16 :
+		case eInfoType_u32 :
+		case eInfoType_f :
+		case eInfoType_d :
+			info->value = value;
+			break;
+		default:
+			fprintf(stderr, "wrong player_info->type value\n");
+			exit(1);
+			break;
+	}
+
+}
+
+static struct info *
+player_add_info_gen(	struct player *player, 
+						int32_t id, 
+						char *key, 
+						ePlayerInfoType type, 
+						uPlayerInfoValue value, 
+						int flags)
 {
 	struct info *info;
 
-	if (flags & OVERWITE_DUPLICATES) {
-		for (info = player->info; info; info = info->next) {
-			if (0 == strcmp(info->name, key)) {
-				// We should be able to free this
-				free(info->value);
-				if (flags & NO_VALUE_COPY) {
-					info->value = value;
-				} else {
-					info->value = strdup(value);
+	if( flags & (OVERWITE_DUPLICATES | CHECK_DUPLICATE_RULES | COMBINE_VALUES) )
+	{
+		for (info = player->info; info; info = info->next) 
+		{
+			if	(	(id == -1) && (0 == strcmp(info->name, key) )
+				|| 	(id >= 0)  && (id == info->id))
+			{
+				if (flags & OVERWITE_DUPLICATES) 
+				{
+					player_info_set_value(info,value,flags);
+					return (info);
 				}
-
-				return (info);
-			}
-		}
-	}
-
-	if (flags & CHECK_DUPLICATE_RULES) {
-		for (info = player->info; info; info = info->next) {
-			if (0 == strcmp(info->name, key)) {
-				return (NULL);
-			}
-		}
-	}
-
-	if (flags & COMBINE_VALUES) {
-		for (info = player->info; info; info = info->next) {
-			if (0 == strcmp(info->name, key)) {
-				char *full_value = (char *)calloc(sizeof(char), strlen(info->value) + strlen(value) + 2);
-				if (NULL == full_value) {
-					fprintf(stderr, "Failed to malloc combined value\n");
-					exit(1);
+				if (flags & CHECK_DUPLICATE_RULES)
+				{
+					return (NULL);
 				}
-				sprintf(full_value, "%s%s%s", info->value, multi_delimiter, value);
-
-				// We should be able to free this
-				free(info->value);
-				info->value = full_value;
-
-				return (info);
+				if ((info->type == eInfoType_str) && (flags & COMBINE_VALUES))
+				{
+					char *full_value = (char *)calloc(sizeof(char), strlen(info->value.str) + strlen(value.str) + 2);
+					if (NULL == full_value)
+					{
+						fprintf(stderr, "Failed to malloc combined value\n");
+						exit(1);
+					}
+					sprintf(full_value, "%s%s%s", info->value.str, multi_delimiter, value.str);
+					player_info_set_value(info,(uPlayerInfoValue)full_value,NO_VALUE_COPY);
+					return (info);
+				}
 			}
 		}
 	}
 
-	info = (struct info *)malloc(sizeof(struct info));
-	if (flags & NO_KEY_COPY) {
+	info = (struct info *)calloc(1,sizeof(struct info));
+	info->id = id;
+	if (flags & NO_KEY_COPY)
+	{
 		info->name = key;
-	} else {
+	}
+	else
+	{
 		info->name = strdup(key);
 	}
-	if (flags & NO_VALUE_COPY) {
-		info->value = value;
-	} else {
-		info->value = strdup(value);
-	}
+	info->type = type;
+	player_info_set_value(info,value,flags);
 	info->next = NULL;
 
-	if (NULL == player->info) {
+	if (NULL == player->info)
+	{
 		player->info = info;
-	} else {
+	}
+	else
+	{
 		*player->last_info = info;
 	}
 	player->last_info = &info->next;
@@ -7369,6 +7523,94 @@ player_add_info(struct player *player, char *key, char *value, int flags)
 	return (info);
 }
 
+// Legacy code compatibility (char type + no id)
+struct info *
+player_add_info(struct player *player, char *key, char* value, int flags)
+{
+	uPlayerInfoValue wrapped_value;
+	wrapped_value.str = value;
+	return player_add_info_gen(player,-1,key,eInfoType_str,wrapped_value,flags);
+}
+
+struct info *
+player_add_info_str(struct player *player, int32_t id, char *key, char* value, int flags)
+{
+	uPlayerInfoValue wrapped_value;
+	wrapped_value.str = value;
+	return player_add_info_gen(player, id, key, eInfoType_str, wrapped_value, flags);
+}
+
+struct info *
+player_add_info_bool(struct player *player, int32_t id, char *key, uint8_t value, int flags)
+{
+	uPlayerInfoValue wrapped_value;
+	wrapped_value.b = value > 0 ? 1 : 0;
+	return player_add_info_gen(player, id, key, eInfoType_b, wrapped_value, flags);
+}
+
+struct info *
+player_add_info_u8(struct player *player, int32_t id, char *key, uint8_t value, int flags)
+{
+	uPlayerInfoValue wrapped_value;
+	wrapped_value.u8 = value;
+	return player_add_info_gen(player, id, key, eInfoType_u8, wrapped_value, flags);
+}
+
+struct info *
+player_add_info_u16(struct player *player, int32_t id, char *key, uint16_t value, int flags)
+{
+	uPlayerInfoValue wrapped_value;
+	wrapped_value.u16 = value;
+	return player_add_info_gen(player, id, key, eInfoType_u16, wrapped_value, flags);
+}
+
+struct info *
+player_add_info_u32(struct player *player, int32_t id, char *key, uint32_t value, int flags)
+{
+	uPlayerInfoValue wrapped_value;
+	wrapped_value.u32 = value;
+	return player_add_info_gen(player, id, key, eInfoType_u32, wrapped_value, flags);
+}
+
+struct info *
+player_add_info_i8(struct player *player, int32_t id, char *key, int8_t value, int flags)
+{
+	uPlayerInfoValue wrapped_value;
+	wrapped_value.i8 = value;
+	return player_add_info_gen(player, id, key, eInfoType_i8, wrapped_value, flags);
+}
+
+struct info *
+player_add_info_i16(struct player *player, int32_t id, char *key, int16_t value, int flags)
+{
+	uPlayerInfoValue wrapped_value;
+	wrapped_value.i16 = value;
+	return player_add_info_gen(player, id, key, eInfoType_i16, wrapped_value, flags);
+}
+
+struct info *
+player_add_info_i32(struct player *player, int32_t id, char *key, int32_t value, int flags)
+{
+	uPlayerInfoValue wrapped_value;
+	wrapped_value.i32 = value;
+	return player_add_info_gen(player, id, key, eInfoType_i32, wrapped_value, flags);
+}
+
+struct info *
+player_add_info_f(struct player *player, int32_t id, char *key, float value, int flags)
+{
+	uPlayerInfoValue wrapped_value;
+	wrapped_value.f = value;
+	return player_add_info_gen(player, id, key, eInfoType_f, wrapped_value, flags);
+}
+
+struct info *
+player_add_info_d(struct player *player, int32_t id, char *key, double value, int flags)
+{
+	uPlayerInfoValue wrapped_value;
+	wrapped_value.d = value;
+	return player_add_info_gen(player, id, key, eInfoType_d, wrapped_value, flags);
+}
 
 struct rule *
 add_rule(struct qserver *server, char *key, char *value, int flags)
@@ -7482,6 +7724,11 @@ add_player(struct qserver *server, int player_number)
 	player->deaths = NA_INT;
 	player->frags = NA_INT;
 	player->last_info = NULL;
+	player->connect_time = NA_INT;
+	player->shirt_color = NA_INT;
+	player->pants_color = NA_INT;
+	player->packet_loss = NA_INT;
+	player->type_flag = PLAYER_TYPE_NORMAL;
 	server->players = player;
 	server->n_player_info++;
 	return (player);

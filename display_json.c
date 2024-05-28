@@ -281,12 +281,19 @@ void
 json_display_player_info_info(struct player *player)
 {
 	struct info *info;
+	char szTMP[MAXSTRLEN];
 
 	for (info = player->info; info; info = info->next) {
 		if (info->name) {
 			char *name = json_escape(info->name);
-			char *value = json_escape(info->value);
-			xform_printf(OF, "\t\t\t\t\"%s\": \"%s\",\n", name, value);
+			player_info_get_formated_value(info,szTMP);
+			char *value = json_escape(szTMP);
+			if(info->type ==eInfoType_str)
+			{
+				sprintf(szTMP,"\"%s\"",value);
+				value = szTMP;
+			}
+			xform_printf(OF, "\t\t\t\t\"%s\": %s,\n", name, value);
 		}
 	}
 }
@@ -673,6 +680,7 @@ json_display_player_info(struct qserver *server)
 
 	player = server->players;
 	for ( ; player != NULL; player = player->next) {
+		char szTMP[1024] = {0};
 		if (printed) {
 			xform_printf(OF, ",\n");
 		}
@@ -697,8 +705,27 @@ json_display_player_info(struct qserver *server)
 		if (player->skin != NULL) {
 			xform_printf(OF, "\t\t\t\t\"skin\": \"%s\",\n", json_escape(player->skin));
 		}
+		if (player->type_flag & PLAYER_TYPE_BOT) 
+		{
+			strcpy(szTMP,"\"bot\"");
+		} 
+		else
+		{
+			strcpy(szTMP,"\"player\"");
+			if (player->type_flag & PLAYER_TYPE_ALIAS)
+				strcat(szTMP,",\"alias\"");
+			if (player->type_flag & PLAYER_TYPE_ADMIN)
+				strcat(szTMP,",\"admin\"");
+			if (player->type_flag & PLAYER_TYPE_SPEC)
+				strcat(szTMP,",\"spec\"");
+			if (player->type_flag & PLAYER_TYPE_AUTH)
+				strcat(szTMP,",\"auth\"");
+		}
+		xform_printf(OF, "\t\t\t\t\"type\": [ %s ],\n", szTMP);
+
 		if (player->connect_time != 0) {
-			xform_printf(OF, "\t\t\t\t\"time\": \"%s\",\n", json_escape(play_time(player->connect_time, 1)));
+			xform_printf(OF, "\t\t\t\t\"time\": %s,\n", json_escape(play_time(player->connect_time, 1)));
+			xform_printf(OF, "\t\t\t\t\"connect_time\": %d,\n", player->connect_time);
 		}
 		if (player->address != NULL) {
 			xform_printf(OF, "\t\t\t\t\"address\": \"%s\",\n", json_escape(player->address));

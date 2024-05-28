@@ -45,6 +45,7 @@ qstat_SOURCES = \
 	template.c \
 	display_json.c display_json.h \
 	a2s.c a2s.h \
+	a2s_openra.c a2s_openra.h \
 	packet_manip.c packet_manip.h \
 	ut2004.c ut2004.h \
 	doom3.c doom3.h \

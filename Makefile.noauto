@@ -1,8 +1,9 @@
 ## Uncomment if you have gcc
-#CC      = gcc
-#CFLAGS  = -Wall -g -O2
-#LDFLAGS =
-#LDLIBS  =
+CC      = gcc
+## CFLAGS  = -Wall -g -O2
+CFLAGS  = -g -O2
+LDFLAGS = 
+LDLIBS  = -LC:\Windows\system32
 
 #CFLAGS += -Dsysconfdir=\"/etc\"
 CFLAGS = -DDEBUG=1 -DENABLE_DUMP=1
@@ -23,6 +24,7 @@ SRC = \
 	display_json.c \
 	ut2004.c \
 	a2s.c \
+	a2s_openra.c \
 	packet_manip.c \
 	gs3.c \
 	gs2.c \
@@ -57,7 +59,7 @@ OBJ = $(SRC:.c=.obj)
 O   = $(SRC:.c=.o)
 
 SOLARIS_LIBS = -lsocket -lnsl
-WINDOWS_LIBS = wsock32.lib
+WINDOWS_LIBS = -lwsock32
 OS2_LIBS     = so32dll.lib tcp32dll.lib
 EMX_LIBS     = -lsocket
 
@@ -122,11 +124,9 @@ qstat.exe: version.h $(OBJ)
 
 # windows release forced
 windows: $(SOURCES)
-	$(CC) $(CFLAGS) $(SRC) /Feqstat.exe $(WINDOWS_LIBS)
-
-# windows debug forced
+	$(CC) $(CFLAGS) $(SRC) -o qstat.exe $(WINDOWS_LIBS)
 windows_debug: $(SOURCES)
-	$(CC) $(CFLAGS) /Zi $(SRC) /Feqstat.exe $(WINDOWS_LIBS) /link /fixed:no /incremental:no
+	$(CC) -g $(CFLAGS) $(SRC) -o qstat.exe $(WINDOWS_LIBS)
 
 clean:
 	-rm -f qstat core qstat.exe *.pdb .compiler_flags .version version.h $(O) $(OBJ)

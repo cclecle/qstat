@@ -16,7 +16,7 @@
 
 #ifdef DEBUG
  #include <stdarg.h>
- #ifdef _WIN32
+ #if (defined(_WIN32) && !defined(__GNUC__))
 		void _debug(const char *file, int line, const char *function, int level, const char *fmt, ...);
 
 		#define debug(level, fmt, ...)		\
